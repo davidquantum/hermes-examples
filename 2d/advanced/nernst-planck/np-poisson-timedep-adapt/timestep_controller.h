@@ -1,4 +1,8 @@
-#include "header.h"
+
+#include "hermes2d.h"
+
+using namespace Hermes;
+using namespace Hermes::Hermes2D;
 
 #define PID_DEFAULT_TOLERANCE 0.25
 #define DEFAULT_STEP 0.1
