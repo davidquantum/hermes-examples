@@ -19,7 +19,7 @@ int main (int argc, char* argv[]) {
 
   // Load the mesh file.
   Mesh C_mesh, phi_mesh, basemesh;
-  H2DReader mloader;
+  MeshReaderH2D mloader;
   mloader.load("../small.mesh", &basemesh);
 
   bool ret = basemesh.rescale(l, l);
@@ -63,10 +63,34 @@ int main (int argc, char* argv[]) {
   OrderView<double> Cordview("C order", new WinGeom(0, 300, 600, 600));
   OrderView<double> phiordview("Phi order", new WinGeom(600, 300, 600, 600));
 
-  Cview.show(&C_prev_time);
+    Cview.show(&C_prev_time);
   Cordview.show(&C_space);
   phiview.show(&phi_prev_time);
   phiordview.show(&phi_space);
+  View::wait(HERMES_WAIT_KEYPRESS);
+
+
+
+  DiscreteProblem<double>* dp = new DiscreteProblem<double>(wf, Hermes::vector<Space<double> *>(&C_space, &phi_space));
+  Hermes::vector<int> *stationary_spaces = new Hermes::vector<int>();
+  stationary_spaces->push_back(1);
+  RungeKutta<double> runge_kutta(dp, &bt, matrix_solver, false, true, stationary_spaces);
+
+  // Perform one Runge-Kutta time step according to the selected Butcher's table.
+  info("INITIAL RUNGE-KUTTA STEP");
+        bool freeze_jacobian = true;
+        bool block_diagonal_jacobian = false;
+        bool verbose = true;
+        if (!runge_kutta.rk_time_step(0, scaleTime(INIT_TAU),
+              Hermes::vector<Solution<double>*>(&C_prev_time, &phi_prev_time),
+              Hermes::vector<Solution<double>*>(&C_sln, &phi_sln),
+                                      freeze_jacobian, block_diagonal_jacobian,
+                                      verbose, NEWTON_TOL_FINE, NEWTON_MAX_ITER)) {
+          error("Runge-Kutta time step failed, try to decrease time step size.");
+        }
+  Cview.show(&C_sln);
+  phiview.show(&phi_sln);
+  View::wait(HERMES_WAIT_KEYPRESS);
 
   int ts = 1;
   do {
@@ -97,13 +121,15 @@ int main (int argc, char* argv[]) {
 
       DiscreteProblem<double>* dp = new DiscreteProblem<double>(wf, *ref_spaces);
 
-      RungeKutta<double> runge_kutta(dp, &bt, matrix_solver, false, true, Hermes::vector<int>(1));
+      Hermes::vector<int> *stationary_spaces = new Hermes::vector<int>();
+      stationary_spaces->push_back(1);
+      RungeKutta<double> runge_kutta(dp, &bt, matrix_solver, false, true, stationary_spaces);
 
       // Perform one Runge-Kutta time step according to the selected Butcher's table.
       info("Runge-Kutta time step (t = %g s, tau = %g s, stages: %d).",
            current_time, INIT_TAU, bt.get_size());
       bool freeze_jacobian = true;
-      bool block_diagonal_jacobian = true;
+      bool block_diagonal_jacobian = false;
       bool verbose = true;
       if (!runge_kutta.rk_time_step(scaleTime(current_time), scaleTime(INIT_TAU),
             Hermes::vector<Solution<double>*>(&C_prev_time, &phi_prev_time),
@@ -113,7 +139,7 @@ int main (int argc, char* argv[]) {
         error("Runge-Kutta time step failed, try to decrease time step size.");
       }
 
-      Solution<double> C_coarse, phi_coarse;
+      //Solution<double> C_coarse, phi_coarse;
 
       // Projecting reference solution onto the coarse mesh
       info("Projecting fine mesh solution on coarse mesh.");
@@ -129,6 +155,11 @@ int main (int argc, char* argv[]) {
       double err_est_rel_total = adaptivity->calc_err_est(Hermes::vector<Solution<double> *>(&C_sln, &phi_sln),
                                  Hermes::vector<Solution<double> *>(&C_ref_sln, &phi_ref_sln), &err_est_rel) * 100;
 
+      Cview.set_title("C_sln");
+      Cview.show(&C_sln);
+      phiview.set_title("phi_sln");
+      phiview.show(&phi_sln);
+      View::wait(HERMES_WAIT_KEYPRESS);
       // Report results.
       info("ndof_coarse[0]: %d, ndof_fine[0]: %d",
            C_space.get_num_dofs(), (*ref_spaces)[0]->get_num_dofs());
@@ -163,6 +194,7 @@ int main (int argc, char* argv[]) {
           ts, INIT_TAU, current_time, physTime(current_time));
       Cview.set_title(title);
       Cview.show(&C_ref_sln);
+
       sprintf(title, "Mesh[C], step# %d, step size %g, time %g",
           ts, INIT_TAU, current_time);
       Cordview.set_title(title);
@@ -178,6 +210,7 @@ int main (int argc, char* argv[]) {
       phiordview.set_title(title);
       phiordview.show(&phi_space);
       //View::wait(HERMES_WAIT_KEYPRESS);
+      View::wait(HERMES_WAIT_KEYPRESS);
 
       // Clean up.
       delete adaptivity;

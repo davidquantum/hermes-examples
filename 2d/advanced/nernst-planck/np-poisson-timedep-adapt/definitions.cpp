@@ -31,7 +31,7 @@ private:
           prev_newton = u_ext[1];
           for (int i = 0; i < n; i++) {
 
-            result += wt[i] * (-1 * this->epsilon * ((u->dx[i] * v->dx[i] + u->dy[i] * v->dy[i]) -
+            result += wt[i] * (-1 * this->epsilon * ((u->dx[i] * v->dx[i] + u->dy[i] * v->dy[i]) +
                     u->val[i] * (prev_newton->dx[i] * v->dx[i] + prev_newton->dy[i] * v->dy[i])));
           }
           return result;
@@ -73,7 +73,7 @@ private:
 
 
     virtual MatrixFormVol<double>* clone() {
-      return new ScaledWeakFormPNPRungeKutta::Jacobian(*this);
+      return new ScaledWeakFormPNPRungeKutta::Jacobian(i, j, epsilon);
     }
 
     // Members.
@@ -99,7 +99,7 @@ private:
               phi_prev_newton = u_ext[1];
               for (int i = 0; i < n; i++) {
                 result += wt[i] * (
-                    -1 * this->epsilon * ((C_prev_newton->dx[i] * v->dx[i] + C_prev_newton->dy[i] * v->dy[i]) -
+                    -1 * this->epsilon * ((C_prev_newton->dx[i] * v->dx[i] + C_prev_newton->dy[i] * v->dy[i]) +
                       C_prev_newton->val[i] * (phi_prev_newton->dx[i] * v->dx[i] + phi_prev_newton->dy[i] * v->dy[i])));
               }
               return result;
@@ -130,7 +130,7 @@ private:
 
 
         virtual VectorFormVol<double>* clone() {
-          return new ScaledWeakFormPNPRungeKutta::Residual(*this);
+          return new ScaledWeakFormPNPRungeKutta::Residual(i, epsilon);
         }
 
         // Members.
