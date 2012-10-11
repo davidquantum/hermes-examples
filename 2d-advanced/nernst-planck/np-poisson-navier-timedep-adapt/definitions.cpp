@@ -66,27 +66,27 @@ private:
           break;
         case 22:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * ((this->lambda / this->mu + 1) * u->dx[i] * v->dx[i] +
-              u->dx[i] * v->dx[i] + u->dy[i] * v->dy[i]);
+            result += wt[i] * ((this->lambda / this->mu + 2) * u->dx[i] * v->dx[i] +
+              u->dy[i] * v->dy[i]);
           }
           return result;
           break;
         case 23:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * ((this->lambda / this->mu + 1) * u->dy[i] * v->dx[i]);
+            result += wt[i] * (u->dx[i] * v->dy[i] + (this->lambda / this->mu) * u->dy[i] * v->dx[i]);
           }
           return result;
           break;
         case 32:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * ((this->lambda / this->mu + 1) * u->dx[i] * v->dy[i]);
+            result += wt[i] * (u->dy[i] * v->dx[i] + (this->lambda / this->mu) * u->dx[i] * v->dy[i]);
           }
           return result;
           break;
         case 33:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * ((this->lambda / this->mu + 1) * u->dy[i] * v->dy[i] +
-              u->dx[i] * v->dx[i] + u->dy[i] * v->dy[i]);
+            result += wt[i] * ((this->lambda / this->mu + 2) * u->dy[i] * v->dy[i] +
+              u->dx[i] * v->dx[i]);
           }
           return result;
           break;
@@ -159,8 +159,9 @@ private:
               U1_prev_newton = u_ext[2];
               U2_prev_newton = u_ext[3];
               for (int i = 0; i < n; i++) {
-                result += wt[i] * ((this->lambda / this->mu + 1) * (U1_prev_newton->dx[i] * v->dx[i] + U2_prev_newton->dx[i] * v->dy[i])
-                    + U1_prev_newton->dx[i] * v->dx[i] + U1_prev_newton->dy[i] * v->dy[i]
+                result += wt[i] * ((this->lambda / this->mu + 2) * (U1_prev_newton->dx[i] * v->dx[i]) 
+                    + U1_prev_newton->dy[i] * v->dy[i] + U2_prev_newton->dx[i]*v->dy[i] 
+                    + (this->lambda / this->mu) * (U2_prev_newton->dy[i] * v->dx[i])
                     + (this->l / this->lambda * this->AC0) * (1 - C_prev_newton->val[i]) * v->val[i]);
               }
               return result;
@@ -170,8 +171,9 @@ private:
               U1_prev_newton = u_ext[2];
               U2_prev_newton = u_ext[3];
               for (int i = 0; i < n; i++) {
-                result += wt[i] * ((this->lambda / this->mu + 1)* (U1_prev_newton->dy[i] * v->dx[i] + U2_prev_newton->dy[i] * v->dy[i])
-                    + U2_prev_newton->dx[i] * v->dx[i] + U2_prev_newton->dy[i] * v->dy[i]);
+                result += wt[i] * ((this->lambda / this->mu + 2)* (U2_prev_newton->dy[i] * v->dy[i]) 
+                    + U2_prev_newton->dx[i] * v->dx[i] + U1_prev_newton->dy[i]*v->dx[i] 
+                    + (this->lambda / this->mu) * (U1_prev_newton->dx[i] * v->dy[i]));
               }
               return result;
             default:
