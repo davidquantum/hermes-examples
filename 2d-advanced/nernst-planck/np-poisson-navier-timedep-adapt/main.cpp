@@ -86,7 +86,7 @@ const double mech_E = 0.5e9;                      // [Pa]
 const double mech_nu = 0.487;                     // Poisson ratio
 const double mech_mu = mech_E / (2 * (1 + mech_nu));
 const double mech_lambda = mech_E * mech_nu / ((1 + mech_nu) * (1 - 2 * mech_nu));
-const double lin_force_coup = 1e1;
+const double lin_force_coup = 1e5;
 
 
 // [V] Applied voltage.
@@ -151,7 +151,7 @@ const double CONV_EXP = 1.0;
 // To prevent adaptivity from going on forever.
 const int NDOF_STOP = 5000;	                      
 // Stopping criterion for adaptivity.
-const double ERR_STOP = 0.1;                      
+const double ERR_STOP = 2;                      
 // Matrix solver: SOLVER_AMESOS, SOLVER_AZTECOO, SOLVER_MUMPS,
 // SOLVER_PETSC, SOLVER_SUPERLU, SOLVER_UMFPACK.
 MatrixSolverType matrix_solver = SOLVER_UMFPACK;  
@@ -511,7 +511,7 @@ int main (int argc, char* argv[]) {
       U2view.show(&U2_ref_sln);
 
 
-      View::wait(HERMES_WAIT_KEYPRESS);
+      //View::wait(HERMES_WAIT_KEYPRESS);
 
       // Clean up.
       delete solver;
