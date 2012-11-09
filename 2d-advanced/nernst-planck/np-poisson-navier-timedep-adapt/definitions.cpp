@@ -2,18 +2,18 @@
 
 class ScaledWeakFormPNPEulerCranic : public WeakForm<double> {
 public:
-  ScaledWeakFormPNPEulerCranic(double* tau, double epsilon, double AC0, double mu, double lambda, double l,
+  ScaledWeakFormPNPEulerCranic(double* tau, double epsilon, double AC0, double nu,
         Solution<double>* C_prev_time, Solution<double>* phi_prev_time) : WeakForm<double>(4) {
       for(unsigned int i = 0; i < 4; i++) {
         ScaledWeakFormPNPEulerCranic::Residual* vector_form =
-            new ScaledWeakFormPNPEulerCranic::Residual(i, tau, epsilon, AC0, mu, lambda, l);
+            new ScaledWeakFormPNPEulerCranic::Residual(i, tau, epsilon, AC0, nu);
         if(i == 0) {
           vector_form->ext.push_back(C_prev_time);
           vector_form->ext.push_back(phi_prev_time);
         }
         add_vector_form(vector_form);
         for(unsigned int j = 0; j < 4; j++)
-          add_matrix_form(new ScaledWeakFormPNPEulerCranic::Jacobian(i, j, tau, epsilon, AC0, mu, lambda, l));
+          add_matrix_form(new ScaledWeakFormPNPEulerCranic::Jacobian(i, j, tau, epsilon, AC0, nu));
       }
     };
 
@@ -21,8 +21,8 @@ private:
   class Jacobian : public MatrixFormVol<double> {
   public:
     Jacobian(int i, int j, double* tau, double epsilon, double AC0, 
-        double mu, double lambda, double l) : MatrixFormVol<double>(i, j),
-          i(i), j(j), tau(tau), epsilon(epsilon), AC0(AC0), mu(mu), lambda(lambda), l(l) {}
+        double nu) : MatrixFormVol<double>(i, j),
+          i(i), j(j), tau(tau), epsilon(epsilon), AC0(AC0), nu(nu) {}
 
     template<typename Real, typename Scalar>
     Real matrix_form(int n, double *wt, Func<Scalar> *u_ext[], Func<Real> *u,
@@ -60,33 +60,33 @@ private:
           break;
         case 20:
           for (int i = 0; i < n; i++) { // XXX check -
-            result += wt[i] * (-this->l / this->mu * this->AC0 * u->val[i] * v->val[i]);
+            result += wt[i] * (-(this->nu + 1) * this->AC0 * u->val[i] * v->val[i]);
           }
           return result;
           break;
         case 22:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * ((this->lambda / this->mu + 2) * u->dx[i] * v->dx[i] +
-              u->dy[i] * v->dy[i]);
+            result += wt[i] * ((1 + this->nu / (1 - 2*this->nu)) * u->dx[i] * v->dx[i] +
+              0.5 * u->dy[i] * v->dy[i]);
           }
           return result;
           break;
         case 23:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * (u->dx[i] * v->dy[i] + (this->lambda / this->mu) * u->dy[i] * v->dx[i]);
+            result += wt[i] * (this->nu / (1 - 2*this->nu) * u->dy[i] * v->dx[i] + 0.5 * u->dx[i] * v->dy[i]);
           }
           return result;
           break;
         case 32:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * (u->dy[i] * v->dx[i] + (this->lambda / this->mu) * u->dx[i] * v->dy[i]);
+            result += wt[i] * (this->nu / (1 - 2*this->nu) * u->dx[i] * v->dy[i] + 0.5 * u->dy[i] * v->dx[i]);
           }
           return result;
           break;
         case 33:
           for (int i = 0; i < n; i++) {
-            result += wt[i] * ((this->lambda / this->mu + 2) * u->dy[i] * v->dy[i] +
-              u->dx[i] * v->dx[i]);
+            result += wt[i] * ((1 + this->nu / (1 - 2*this->nu)) * u->dy[i] * v->dy[i] +
+              0.5 * u->dx[i] * v->dx[i]);
           }
           return result;
           break;
@@ -109,17 +109,15 @@ private:
     int i, j;
     double* tau;
     double epsilon;
-    double lambda;
-    double mu;
+    double nu;
     double AC0;
-    double l;
   };
 
   class Residual : public VectorFormVol<double>
       {
       public:
-        Residual(int i, double* tau, double epsilon, double AC0, double mu, double lambda, double l)
-          : VectorFormVol<double>(i), i(i), tau(tau), epsilon(epsilon), AC0(AC0), mu(mu), lambda(lambda), l(l) {}
+        Residual(int i, double* tau, double epsilon, double AC0, double nu)
+          : VectorFormVol<double>(i), i(i), tau(tau), epsilon(epsilon), AC0(AC0), nu(nu) {}
 
         template<typename Real, typename Scalar>
         Real vector_form(int n, double *wt, Func<Scalar> *u_ext[],
@@ -159,10 +157,10 @@ private:
               U1_prev_newton = u_ext[2];
               U2_prev_newton = u_ext[3];
               for (int i = 0; i < n; i++) {
-                result += wt[i] * ((this->lambda / this->mu + 2) * (U1_prev_newton->dx[i] * v->dx[i]) 
-                    + U1_prev_newton->dy[i] * v->dy[i] + U2_prev_newton->dx[i]*v->dy[i] 
-                    + (this->lambda / this->mu) * (U2_prev_newton->dy[i] * v->dx[i])
-                    + (this->l / this->lambda * this->AC0) * (1 - C_prev_newton->val[i]) * v->val[i]);
+                result += wt[i] * ((1+ this->nu / (1 - 2*this->nu)) * (U1_prev_newton->dx[i] * v->dx[i]) 
+                    + (this->nu / (1 - 2 * this->nu))* U2_prev_newton->dy[i] * v->dx[i] + 0.5 * (U1_prev_newton->dy[i]*v->dy[i] 
+                    + U2_prev_newton->dx[i] * v->dy[i])
+                    + (this->nu + 1) * this->AC0  * (1 - C_prev_newton->val[i]) * v->val[i]);
               }
               return result;
             case 3:
@@ -171,9 +169,9 @@ private:
               U1_prev_newton = u_ext[2];
               U2_prev_newton = u_ext[3];
               for (int i = 0; i < n; i++) {
-                result += wt[i] * ((this->lambda / this->mu + 2)* (U2_prev_newton->dy[i] * v->dy[i]) 
-                    + U2_prev_newton->dx[i] * v->dx[i] + U1_prev_newton->dy[i]*v->dx[i] 
-                    + (this->lambda / this->mu) * (U1_prev_newton->dx[i] * v->dy[i]));
+                result += wt[i] * ((1+ this->nu / (1 - 2*this->nu)) * (U2_prev_newton->dy[i] * v->dy[i]) 
+                    + (this->nu / (1 - 2 * this->nu))* U1_prev_newton->dx[i] * v->dy[i] + 0.5 * (U2_prev_newton->dx[i]*v->dx[i] 
+                    + U1_prev_newton->dy[i] * v->dx[i]));
               }
               return result;
             default:
@@ -196,9 +194,7 @@ private:
         double* tau;
         double epsilon;
         double AC0;
-        double mu;
-        double lambda;
-        double l;
+        double nu;
       };
 
 

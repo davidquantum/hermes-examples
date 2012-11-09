@@ -84,9 +84,8 @@ double epsilon = lambda/l;
 // mechanical parameters
 const double mech_E = 0.5e9;                      // [Pa]
 const double mech_nu = 0.487;                     // Poisson ratio
-const double mech_mu = mech_E / (2 * (1 + mech_nu));
-const double mech_lambda = mech_E * mech_nu / ((1 + mech_nu) * (1 - 2 * mech_nu));
 const double lin_force_coup = 1e5;
+const double mech_force = 1 / mech_E * (C0 * lin_force_coup * l);
 
 
 // [V] Applied voltage.
@@ -265,8 +264,8 @@ int main (int argc, char* argv[]) {
   WeakForm<double> *wf;
   if (TIME_DISCR == 2) {
     if (SCALED) {
-      wf = new ScaledWeakFormPNPEulerCranic(TAU, epsilon, C0 * lin_force_coup,
-        mech_mu, mech_lambda, l, &C_prev_time, &phi_prev_time);
+      wf = new ScaledWeakFormPNPEulerCranic(TAU, epsilon, mech_force,
+        mech_nu, &C_prev_time, &phi_prev_time);
       info("Scaled weak form, with time step %g and epsilon %g", *TAU, epsilon);
     } else {
       error("Non-scaled form has not been implemented yet");
