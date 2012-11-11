@@ -82,7 +82,7 @@ double lambda = Hermes::sqrt((eps)*R*T/(2.0*F*F*C0));
 double epsilon = lambda/l;
 
 // mechanical parameters
-const double mech_E = 0.5e9;                      // [Pa]
+const double mech_E = 0.2e9;                      // [Pa]
 const double mech_nu = 0.487;                     // Poisson ratio
 const double lin_force_coup = 1e5;
 const double mech_force = 1 / mech_E * (C0 * lin_force_coup * l);
@@ -132,7 +132,7 @@ const double THRESHOLD = 0.3;
 //   than THRESHOLD times maximum element error.
 // STRATEGY = 2 ... refine all elements whose error is larger
 //   than THRESHOLD.
-const int STRATEGY = 0;                           
+const int STRATEGY = 1;                           
 // Predefined list of element refinement candidates. Possible values are
 // H2D_P_ISO, H2D_P_ANISO, H2D_H_ISO, H2D_H_ANISO, H2D_HP_ISO,
 // H2D_HP_ANISO_H, H2D_HP_ANISO_P, H2D_HP_ANISO.
@@ -150,7 +150,7 @@ const double CONV_EXP = 1.0;
 // To prevent adaptivity from going on forever.
 const int NDOF_STOP = 5000;	                      
 // Stopping criterion for adaptivity.
-const double ERR_STOP = 2;                      
+const double ERR_STOP = 1;                      
 // Matrix solver: SOLVER_AMESOS, SOLVER_AZTECOO, SOLVER_MUMPS,
 // SOLVER_PETSC, SOLVER_SUPERLU, SOLVER_UMFPACK.
 MatrixSolverType matrix_solver = SOLVER_UMFPACK;  
@@ -217,11 +217,14 @@ int main (int argc, char* argv[]) {
   // When nonadaptive solution, refine the mesh.
   basemesh.refine_towards_boundary(BDY_TOP, REF_INIT);
   basemesh.refine_towards_boundary(BDY_BOT, REF_INIT - 1);
-  basemesh.refine_all_elements(1);
-  basemesh.refine_all_elements(1);
+  basemesh.refine_all_elements(1); //horizontal
+  basemesh.refine_all_elements(2); // vertical
   C_mesh.copy(&basemesh);
-  phi_mesh.copy(&basemesh);
-  U_mesh.copy(&basemesh);
+  if (MULTIMESH)
+  {
+    phi_mesh.copy(&basemesh);
+    U_mesh.copy(&basemesh);
+  }
 
   DefaultEssentialBCConst<double> bc_phi_voltage(BDY_TOP, scaleVoltage(VOLTAGE));
   DefaultEssentialBCConst<double> bc_phi_zero(BDY_BOT, scaleVoltage(0.0));
@@ -300,8 +303,14 @@ int main (int argc, char* argv[]) {
   ScalarView phiview("Voltage [V]", new WinGeom(650, 0, 600, 600));
   ScalarView U1view("X-directional displacement", new WinGeom(10, 10, 800, 800));
   ScalarView U2view("Y-directional displacement", new WinGeom(660, 10, 600, 600));
-  OrderView Cordview("C order", new WinGeom(0, 300, 600, 600));
+  
+  ScalarView mises_view("Von Mises stress [Pa]", new WinGeom(0, 405, 700, 350));
+  
   OrderView phiordview("Phi order", new WinGeom(600, 300, 600, 600));
+  OrderView Cordview("C order", new WinGeom(900, 300, 600, 600));
+
+  SimpleGraph graph_time_err, graph_time_dof, graph_time_dof_u1, graph_time_dof_u2,  graph_time_dof_c, graph_time_dof_phi, graph_time_cpu, graph_time_tip_disp;
+  TimePeriod cpu_time;
 
   Cview.show(&C_prev_time);
   Cordview.show(&C_space);
@@ -339,12 +348,13 @@ int main (int argc, char* argv[]) {
   delete[] coeff_vec_coarse;
   
   // Time stepping loop.
-  PidTimestepController pid(scaleTime(T_FINAL), true, scaleTime(INIT_TAU));
+  PidTimestepController pid(scaleTime(T_FINAL), false, scaleTime(INIT_TAU));
   TAU = pid.timestep;
   info("Starting time iteration with the step %g", *TAU);
 
 
   do {
+    cpu_time.tick();
     pid.begin_step();
     // Periodic global derefinements.
     if (pid.get_timestep_number() > 1 && pid.get_timestep_number() % UNREF_FREQ == 0)
@@ -440,7 +450,7 @@ int main (int argc, char* argv[]) {
             &C_sln, &phi_sln, &U1_sln, &U2_sln),
           Hermes::vector<Solution<double> *>(
             &C_ref_sln, &phi_ref_sln, &U1_ref_sln, &U2_ref_sln), &err_est_rel) * 100;
-
+      cpu_time.tick();
       // Report results.
       info("ndof_coarse[0]: %d, ndof_fine[0]: %d",
            C_space.get_num_dofs(), (*ref_spaces)[0]->get_num_dofs());
@@ -458,7 +468,7 @@ int main (int argc, char* argv[]) {
       info("ndof_coarse_total: %d, ndof_fine_total: %d, err_est_rel: %g%%", 
          Space<double>::get_num_dofs(Hermes::vector<const Space<double> *>(&C_space, &phi_space, &U1_space, &U2_space)),
            Space<double>::get_num_dofs(ref_spaces_const), err_est_rel_total);
-
+      cpu_time.tick(HERMES_SKIP);   // Don't count the time of result projection
       // If err_est too large, adapt the mesh.
       if (err_est_rel_total < ERR_STOP) done = true;
       else 
@@ -474,7 +484,7 @@ int main (int argc, char* argv[]) {
           done = true;
         else as++;
       }
-
+      cpu_time.tick();
       // Visualize the solution and mesh.
       info("Visualization procedures: C");
       char title[100];
@@ -508,7 +518,15 @@ int main (int argc, char* argv[]) {
                pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       U2view.set_title(title);
       U2view.show(&U2_ref_sln);
+      
 
+      // TODO, correct stress values
+      double tmp_lambda = (mech_E * mech_nu) / ((1 + mech_nu) * (1 - 2*mech_nu));
+      double tmp_mu = mech_E / (2*(1 + mech_nu));
+      VonMisesFilter stress(Hermes::vector<MeshFunction<double> *>(&U1_ref_sln, &U2_ref_sln), tmp_lambda, tmp_mu);
+      mises_view.show(&stress, HERMES_EPS_HIGH, H2D_FN_VAL_0, &U1_ref_sln, &U2_ref_sln, 1e3);
+  
+      cpu_time.tick(HERMES_SKIP);
 
       //View::wait(HERMES_WAIT_KEYPRESS);
 
@@ -521,9 +539,41 @@ int main (int argc, char* argv[]) {
     }
     while (done == false);
 
+    double real_time = physTime(pid.get_time());
+    graph_time_err.add_values(real_time, err_est);
+    info("Saving time_error.dat");
+    graph_time_err.save("time_error.dat");
+    
+    graph_time_dof.add_values(real_time, Space<double>::get_num_dofs(Hermes::vector<const Space<double> *>(&C_space, &phi_space,
+                        &U1_space, &U2_space)));
+    info("Saving time_dof.dat");
+    graph_time_dof.save("time_dof.dat");
+
+    graph_time_dof_u1.add_values(real_time, Space<double>::get_num_dofs(&U1_space));
+    graph_time_dof_u2.add_values(real_time, Space<double>::get_num_dofs(&U2_space));
+    graph_time_dof_c.add_values(real_time, Space<double>::get_num_dofs(&C_space));
+    graph_time_dof_phi.add_values(real_time, Space<double>::get_num_dofs(&phi_space));
+    info("Saving time_dof_x.dat");
+    graph_time_dof_u1.save("time_dof_u1.dat");
+    graph_time_dof_u2.save("time_dof_u2.dat");
+    graph_time_dof_c.save("time_dof_c.dat");
+    graph_time_dof_phi.save("time_dof_phi.dat");
+
+    graph_time_cpu.add_values(real_time, cpu_time.accumulated());
+    info("Saving time_cpu.dat");
+    graph_time_cpu.save("time_cpu.dat");
+    
+    //double y_displacement = U2_ref_sln.get_pt_value(1e-3, 0, 0);
+    //info("Obtained displcament");
+    //graph_time_tip_disp.add_values(real_time, y_displacement);
+    //info("Saving time_tipdisp.dat");
+    //graph_time_tip_disp.save("time_tipdisp.dat");
+    
+    cpu_time.tick(HERMES_SKIP);
+
     pid.end_step(Hermes::vector<Solution<double>*> (&C_ref_sln, &phi_ref_sln, &U1_ref_sln, &U2_ref_sln),
         Hermes::vector<Solution<double>*> (&C_prev_time, &phi_prev_time, &U1_prev_time, &U2_prev_time));
-    // TODO! Time step reduction when necessary.
+   
 
     // Copy last reference solution into sln_prev_time.
     C_prev_time.copy(&C_ref_sln);
