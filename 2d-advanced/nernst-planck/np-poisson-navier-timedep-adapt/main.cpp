@@ -4,46 +4,6 @@
 
 #include "timestep_controller.h"
 
-/** \addtogroup e_newton_np_timedep_adapt_system Newton Time-dependant System with Adaptivity
- \{
- \brief This example shows how to combine the automatic adaptivity with the Newton's method for a nonlinear time-dependent PDE system.
-
- This example shows how to combine the automatic adaptivity with the
- Newton's method for a nonlinear time-dependent PDE system.
- The time discretization is done using implicit Euler or
- Crank Nicholson method (see parameter TIME_DISCR).
- The following PDE's are solved:
- Nernst-Planck (describes the diffusion and migration of charged particles):
- \f[dC/dt - D*div[grad(C)] - K*C*div[grad(\phi)]=0,\f]
- where D and K are constants and C is the cation concentration variable,
- phi is the voltage variable in the Poisson equation:
- \f[ - div[grad(\phi)] = L*(C - C_0),\f]
- where \f$C_0\f$, and L are constant (anion concentration). \f$C_0\f$ is constant
- anion concentration in the domain and L is material parameter.
- So, the equation variables are phi and C and the system describes the
- migration/diffusion of charged particles due to applied voltage.
- The simulation domain looks as follows:
- \verbatim
-      Top
-     +----------+
-     |          |
- Side|          |Side
-     |          |
-     +----------+
-      Bottom
- \endverbatim
- For the Nernst-Planck equation, all the boundaries are natural i.e. Neumann.
- Which basically means that the normal derivative is 0:
- \f[ BC: -D*dC/dn - K*C*d\phi/dn = 0 \f]
- For Poisson equation, boundary 1 has a natural boundary condition
- (electric field derivative is 0).
- The voltage is applied to the boundaries 2 and 3 (Dirichlet boundaries)
- It is possible to adjust system paramter VOLT_BOUNDARY to apply
- Neumann boundary condition to 2 (instead of Dirichlet). But by default:
-  - BC 2: \f$\phi = VOLTAGE\f$
-  - BC 3: \f$\phi = 0\f$
-  - BC 1: \f$\frac{d\phi}{dn} = 0\f$
- */
 
 // Parameters to tweak the amount of output to the console.
 #define NOSCREENSHOT
@@ -99,16 +59,17 @@ double INIT_TAU = 0.05;
 // Size of the time step.
 double *TAU = &INIT_TAU;                          
 
-// Scaling time variables.
-//double SCALED_INIT_TAU = INIT_TAU*D/(lambda * l);
-//double TIME_SCALING = lambda * l / D;
-
 // Initial polynomial degree of all mesh elements.
 const int P_INIT = 2;       	                    
 // Number of initial refinements.
 const int REF_INIT = 2;     	                    
+
 // Multimesh?
-const bool MULTIMESH = true;	                    
+const bool MULTIMESH = false;	                    
+
+// U1 == U2 Mesh when multimesh
+const bool DISP_MESH_SHARED = false;
+
 // 1 for implicit Euler, 2 for Crank-Nicolson.
 const int TIME_DISCR = 2;                         
 
@@ -201,7 +162,7 @@ int main (int argc, char* argv[]) {
 
 
   // Load the mesh file.
-  Mesh C_mesh, phi_mesh, U_mesh, basemesh;
+  Mesh C_mesh, phi_mesh, U1_mesh, U2_mesh, basemesh;
   MeshReaderH2D mloader;
   mloader.load("small.mesh", &basemesh);
   
@@ -223,7 +184,11 @@ int main (int argc, char* argv[]) {
   if (MULTIMESH)
   {
     phi_mesh.copy(&basemesh);
-    U_mesh.copy(&basemesh);
+    U1_mesh.copy(&basemesh);
+    if (!DISP_MESH_SHARED)
+    {
+      U2_mesh.copy(&basemesh);
+    }
   }
 
   DefaultEssentialBCConst<double> bc_phi_voltage(BDY_TOP, scaleVoltage(VOLTAGE));
@@ -236,16 +201,12 @@ int main (int argc, char* argv[]) {
   EssentialBCs<double> bcs_U1(&bc_U1_zero);
   EssentialBCs<double> bcs_U2(&bc_U2_zero);
 
-  //EssentialBCs<double> bcs_U1(
-  //    Hermes::vector<EssentialBoundaryCondition<double>* >(&bc_U1_zero));
-  //EssentialBCs<double> bcs_U2(
-  //    Hermes::vector<EssentialBoundaryCondition<double>* >(&bc_U2_zero));
 
   // Spaces for concentration and the voltage.
   H1Space<double> C_space(&C_mesh, P_INIT);
   H1Space<double> phi_space(MULTIMESH ? &phi_mesh : &C_mesh, &bcs_phi, P_INIT);
-  H1Space<double> U1_space(MULTIMESH ? & U_mesh : &C_mesh, &bcs_U1, P_INIT);
-  H1Space<double> U2_space(MULTIMESH ? & U_mesh : &C_mesh, &bcs_U2, P_INIT);
+  H1Space<double> U1_space(MULTIMESH ? &U1_mesh : &C_mesh, &bcs_U1, P_INIT);
+  H1Space<double> U2_space(MULTIMESH ? (DISP_MESH_SHARED ? &U1_mesh : &U2_mesh) : &C_mesh, &bcs_U2, P_INIT);
 
   Solution<double> C_sln, C_ref_sln;
   Solution<double> phi_sln, phi_ref_sln;
@@ -255,8 +216,8 @@ int main (int argc, char* argv[]) {
   // Assign initial condition to mesh.
   ConstantSolution<double> C_prev_time(&C_mesh, scaleConc(C0));
   ConstantSolution<double> phi_prev_time(MULTIMESH ? &phi_mesh : &C_mesh, 0.0);
-  ConstantSolution<double> U1_prev_time(MULTIMESH ? &U_mesh : &C_mesh, 0.0);
-  ConstantSolution<double> U2_prev_time(MULTIMESH ? &U_mesh : &C_mesh, 0.0);
+  ConstantSolution<double> U1_prev_time(MULTIMESH ? &U1_mesh : &C_mesh, 0.0);
+  ConstantSolution<double> U2_prev_time(MULTIMESH ? (DISP_MESH_SHARED ? &U1_mesh : &U2_mesh) : &C_mesh, 0.0);
 
   // XXX not necessary probably
   if (SCALED) {
@@ -364,7 +325,11 @@ int main (int argc, char* argv[]) {
       if (MULTIMESH)
       {
         phi_mesh.copy(&basemesh);
-        U_mesh.copy(&basemesh);
+        U1_mesh.copy(&basemesh);
+        if (!DISP_MESH_SHARED)
+        {
+          U2_mesh.copy(&basemesh);
+        }
       }
       C_space.set_uniform_order(P_INIT);
       phi_space.set_uniform_order(P_INIT);
@@ -372,8 +337,7 @@ int main (int argc, char* argv[]) {
       U2_space.set_uniform_order(P_INIT);
 
     }
-  // TODO from here
-
+ 
     // Adaptivity loop. Note: C_prev_time and Phi_prev_time must not be changed during spatial adaptivity.
     bool done = false; int as = 1;
     double err_est;

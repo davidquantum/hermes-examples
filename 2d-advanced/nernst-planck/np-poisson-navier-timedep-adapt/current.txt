@@ -1,0 +1,8 @@
+Currently run simulation. Update with main.cpp
+MULTIMESH: false; DISP_MESH_SHARED: false; P_INIT: 2; REF_INIT: 2; Adaptivity: HP-FEM; Error: 1%; lin_force_coup=1e5; Refinements: Twds top,bottom, all(1), all(2); 
+
+Past simulations:
+h2d_hp_aniso/multi_common_u:
+MULTIMESH: true; DISP_MESH_SHARED: true; P_INIT: 2; REF_INIT: 2; Adaptivity: HP-FEM; Error: 1%; lin_force_coup=1e5; Refinements: Twds top,bottom, all(1), all(2); 
+h2d_hp_aniso/multi:
+MULTIMESH: true; DISP_MESH_SHARED: false; P_INIT: 2; REF_INIT: 2; Adaptivity: HP-FEM; Error: 1%; lin_force_coup=1e5; Refinements: Twds top,bottom, all(1), all(2); 
