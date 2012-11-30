@@ -1,5 +1,28 @@
 #include "definitions.h"
 
+
+class VoltageGradientBC : public EssentialBoundaryCondition<double>
+{
+  public:
+    VoltageGradientBC(std::string marker, double length, double clamp, double tip) : 
+      EssentialBoundaryCondition<double>(marker), length(length), clamp(clamp), tip(tip)
+      {
+      }
+
+    EssentialBoundaryCondition<double>::EssentialBCValueType get_value_type() const
+    {
+      return EssentialBoundaryCondition<double>::BC_FUNCTION;
+    }
+    double value(double x, double y, double n_x, double n_y, double t_x, double t_y) const
+    { 
+      double drop = clamp - tip;
+      return clamp - x / length * drop;
+    }
+  protected:
+    double length, clamp, tip;
+};
+
+
 class ScaledWeakFormPNPEulerCranic : public WeakForm<double> {
 public:
   ScaledWeakFormPNPEulerCranic(double* tau, double epsilon, double AC0, double nu,

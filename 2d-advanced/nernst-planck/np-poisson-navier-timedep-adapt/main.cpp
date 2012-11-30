@@ -33,6 +33,8 @@ const double K = z * mu * F;
 const double L =  F / eps;	                      
 // [mol/m^3] Anion and counterion concentration.
 const double C0 = 1200;	                          
+// width
+const double w = 5e-3;
 
 // Scaling constants.
 // Scaling const, domain thickness [m].
@@ -65,7 +67,7 @@ const int P_INIT = 2;
 const int REF_INIT = 2;     	                    
 
 // Multimesh?
-const bool MULTIMESH = false;	                    
+const bool MULTIMESH = true;	                    
 
 // U1 == U2 Mesh when multimesh
 const bool DISP_MESH_SHARED = false;
@@ -134,6 +136,10 @@ double scaleVoltage(double phi) {
   return SCALED ? phi * F / (R * T) : phi;
 }
 
+double scaleLength(double length) {
+  return SCALED ? length / l : length;
+}
+
 double scaleConc(double C) {
   return SCALED ? C / C0 : C;
 }
@@ -191,8 +197,11 @@ int main (int argc, char* argv[]) {
     }
   }
 
-  DefaultEssentialBCConst<double> bc_phi_voltage(BDY_TOP, scaleVoltage(VOLTAGE));
-  DefaultEssentialBCConst<double> bc_phi_zero(BDY_BOT, scaleVoltage(0.0));
+  //DefaultEssentialBCConst<double> bc_phi_voltage(BDY_TOP, scaleVoltage(VOLTAGE));
+  //DefaultEssentialBCConst<double> bc_phi_zero(BDY_BOT, scaleVoltage(0.0));
+  VoltageGradientBC bc_phi_voltage(BDY_TOP, scaleLength(w), scaleVoltage(VOLTAGE), scaleVoltage(VOLTAGE / 4));
+  VoltageGradientBC bc_phi_zero(BDY_BOT, scaleLength(w), scaleVoltage(0.0), scaleVoltage(VOLTAGE / 4));
+  
   DefaultEssentialBCConst<double> bc_U1_zero(BDY_SIDE_FIX, disp_boundary());
   DefaultEssentialBCConst<double> bc_U2_zero(BDY_SIDE_FIX, disp_boundary());
 
@@ -273,12 +282,12 @@ int main (int argc, char* argv[]) {
   SimpleGraph graph_time_err, graph_time_dof, graph_time_dof_u1, graph_time_dof_u2,  graph_time_dof_c, graph_time_dof_phi, graph_time_cpu, graph_time_tip_disp;
   TimePeriod cpu_time;
 
-  Cview.show(&C_prev_time);
+  Cview.show(&C_prev_time, HERMES_EPS_VERYHIGH);
   Cordview.show(&C_space);
-  phiview.show(&phi_prev_time);
+  phiview.show(&phi_prev_time, HERMES_EPS_VERYHIGH);
   phiordview.show(&phi_space);
-  U1view.show(&U1_prev_time);
-  U2view.show(&U2_prev_time);
+  U1view.show(&U1_prev_time, HERMES_EPS_VERYHIGH);
+  U2view.show(&U2_prev_time, HERMES_EPS_VERYHIGH);
 
   // Newton's loop on the coarse mesh.
   info("Solving initial coarse mesh");
@@ -299,10 +308,10 @@ int main (int argc, char* argv[]) {
       Hermes::vector<const Space<double> *>(&C_space, &phi_space, &U1_space, &U2_space),
       Hermes::vector<Solution<double> *>(&C_sln, &phi_sln, &U1_sln, &U2_sln));
 
-  Cview.show(&C_sln);
-  phiview.show(&phi_sln);
-  U1view.show(&U1_sln);
-  U2view.show(&U2_sln);
+  Cview.show(&C_sln, HERMES_EPS_VERYHIGH);
+  phiview.show(&phi_sln, HERMES_EPS_VERYHIGH);
+  U1view.show(&U1_sln, HERMES_EPS_VERYHIGH);
+  U2view.show(&U2_sln, HERMES_EPS_VERYHIGH);
 
   // Cleanup after the Newton loop on the coarse mesh.
   delete solver_coarse;
@@ -455,7 +464,7 @@ int main (int argc, char* argv[]) {
       sprintf(title, "Solution[C], step# %d, step size %g, time %g, phys time %g",
           pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       Cview.set_title(title);
-      Cview.show(&C_ref_sln);
+      Cview.show(&C_ref_sln, HERMES_EPS_VERYHIGH);
       sprintf(title, "Mesh[C], step# %d, step size %g, time %g, phys time %g",
           pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       Cordview.set_title(title);
@@ -465,7 +474,7 @@ int main (int argc, char* argv[]) {
       sprintf(title, "Solution[phi], step# %d, step size %g, time %g, phys time %g",
           pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       phiview.set_title(title);
-      phiview.show(&phi_ref_sln);
+      phiview.show(&phi_ref_sln, HERMES_EPS_VERYHIGH);
       sprintf(title, "Mesh[phi], step# %d, step size %g, time %g, phys time %g",
           pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       phiordview.set_title(title);
@@ -475,20 +484,20 @@ int main (int argc, char* argv[]) {
       sprintf(title, "Solution[U1], step# %d, step size %g, time %g, phys time %g",
                pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       U1view.set_title(title);
-      U1view.show(&U1_ref_sln);
+      U1view.show(&U1_ref_sln, HERMES_EPS_VERYHIGH);
 
       info("Visualization procedures: U2");
       sprintf(title, "Solution[U2], step# %d, step size %g, time %g, phys time %g",
                pid.get_timestep_number(), *TAU, pid.get_time(), physTime(pid.get_time()));
       U2view.set_title(title);
-      U2view.show(&U2_ref_sln);
+      U2view.show(&U2_ref_sln, HERMES_EPS_VERYHIGH);
       
 
       // TODO, correct stress values
       double tmp_lambda = (mech_E * mech_nu) / ((1 + mech_nu) * (1 - 2*mech_nu));
       double tmp_mu = mech_E / (2*(1 + mech_nu));
       VonMisesFilter stress(Hermes::vector<MeshFunction<double> *>(&U1_ref_sln, &U2_ref_sln), tmp_lambda, tmp_mu);
-      mises_view.show(&stress, HERMES_EPS_HIGH, H2D_FN_VAL_0, &U1_ref_sln, &U2_ref_sln, 1e3);
+      mises_view.show(&stress, HERMES_EPS_VERYHIGH, H2D_FN_VAL_0, &U1_ref_sln, &U2_ref_sln, 1e3);
   
       cpu_time.tick(HERMES_SKIP);
 
